@@ -42,11 +42,6 @@ export default function ProductsLayout() {
           </Button>
         </nav>
       </header>
-      <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
-        Tuần 6 · TanStack Query, xác thực, phân quyền và state dùng chung bằng
-        Zustand. API demo mô phỏng thao tác ghi, nên thay đổi sản phẩm không
-        được lưu lâu dài.
-      </p>
       <Outlet />
     </main>
   )
