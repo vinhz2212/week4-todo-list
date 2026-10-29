@@ -1,9 +1,10 @@
-import { useEffect, useState, type FormEvent } from "react"
+import { useState, type FormEvent } from "react"
 import { Link, useSearchParams } from "react-router-dom"
 import { Button } from "@/core/components/ui/button"
 import { Input } from "@/core/components/ui/input"
-import { productService } from "../services/product-service"
-import type { Product } from "../types/product"
+import { PermissionGate } from "@/features/auth/components/permission-gate"
+import { PageState } from "@/shared/components/page-state"
+import { useProducts } from "../queries/product-queries"
 
 const PAGE_SIZE = 8
 
@@ -14,49 +15,12 @@ export default function ProductsListPage() {
   const currentPage =
     Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1
   const skip = (currentPage - 1) * PAGE_SIZE
-  const [products, setProducts] = useState<Product[]>([])
-  const [total, setTotal] = useState(0)
-  const [searchInput, setSearchInput] = useState(query)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [searchState, setSearchState] = useState({ query, value: query })
+  const searchInput = searchState.query === query ? searchState.value : query
+  const productsQuery = useProducts({ q: query, limit: PAGE_SIZE, skip })
+  const products = productsQuery.data?.products ?? []
+  const total = productsQuery.data?.total ?? 0
   const totalPages = Math.ceil(total / PAGE_SIZE)
-
-  useEffect(() => {
-    setSearchInput(query)
-  }, [query])
-
-  useEffect(() => {
-    let isActive = true
-    setIsLoading(true)
-    setError(null)
-    setProducts([])
-    setTotal(0)
-
-    productService
-      .getAll({ q: query, limit: PAGE_SIZE, skip })
-      .then((response) => {
-        if (isActive) {
-          setProducts(response.products)
-          setTotal(response.total)
-        }
-      })
-      .catch((requestError: unknown) => {
-        if (isActive) {
-          setError(
-            requestError instanceof Error
-              ? requestError.message
-              : "Đã xảy ra lỗi khi tải sản phẩm."
-          )
-        }
-      })
-      .finally(() => {
-        if (isActive) setIsLoading(false)
-      })
-
-    return () => {
-      isActive = false
-    }
-  }, [query, skip])
 
   function handleSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -77,34 +41,43 @@ export default function ProductsListPage() {
     <section className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-lg font-medium">Danh sách sản phẩm</h2>
-        <Link
-          className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground"
-          to="/products/new"
-        >
-          Thêm sản phẩm
-        </Link>
+        <PermissionGate permission="product:write">
+          <Link
+            className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground"
+            to="/products/new"
+          >
+            Thêm sản phẩm
+          </Link>
+        </PermissionGate>
       </div>
       <form onSubmit={handleSearch} className="flex gap-2">
         <Input
           aria-label="Tìm sản phẩm"
           placeholder="Tìm theo tên sản phẩm..."
           value={searchInput}
-          onChange={(event) => setSearchInput(event.target.value)}
+          onChange={(event) =>
+            setSearchState({ query, value: event.target.value })
+          }
         />
         <Button type="submit">Tìm</Button>
       </form>
-      {isLoading ? (
-        <p role="status" className="rounded-lg border p-5 text-sm">
-          Đang tải sản phẩm...
-        </p>
-      ) : error ? (
-        <p role="alert" className="rounded-lg border border-destructive p-5 text-sm">
-          {error}
-        </p>
+      {productsQuery.isPending ? (
+        <PageState>
+          <PageState.Title>Đang tải sản phẩm...</PageState.Title>
+        </PageState>
+      ) : productsQuery.isError ? (
+        <PageState kind="error">
+          <PageState.Title>Không tải được sản phẩm</PageState.Title>
+          <PageState.Description>
+            {productsQuery.error.message}
+          </PageState.Description>
+        </PageState>
       ) : products.length === 0 ? (
-        <p className="rounded-lg border p-5 text-sm text-muted-foreground">
-          {query ? "Không tìm thấy sản phẩm phù hợp." : "Chưa có sản phẩm."}
-        </p>
+        <PageState>
+          <PageState.Title>
+            {query ? "Không tìm thấy sản phẩm phù hợp." : "Chưa có sản phẩm."}
+          </PageState.Title>
+        </PageState>
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2">
           {products.map((product) => (
@@ -123,7 +96,7 @@ export default function ProductsListPage() {
           ))}
         </ul>
       )}
-      {!isLoading && !error && totalPages > 0 && (
+      {!productsQuery.isPending && !productsQuery.isError && totalPages > 0 && (
         <nav
           aria-label="Phân trang sản phẩm"
           className="flex items-center justify-between gap-3"

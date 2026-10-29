@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { Plus } from "lucide-react"
+import { Link } from "react-router-dom"
 import { toast } from "sonner"
 import { Button } from "@/core/components/ui/button"
 import {
@@ -76,8 +77,18 @@ export default function TodoListPage() {
   return (
     <div className="min-h-svh bg-muted/40 px-4 py-8">
       <section className="mx-auto max-w-xl space-y-4 rounded-2xl border bg-card p-5 shadow-sm sm:p-8">
-        <div className="flex items-center justify-between gap-3">
-          <h1 className="text-xl font-semibold">Your To Do</h1>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold">Your To Do</h1>
+            <nav className="mt-2 flex gap-3 text-sm">
+              <Link className="underline" to="/products">
+                Tuần 5–6 · Quản lý sản phẩm
+              </Link>
+              <Link className="underline" to="/login">
+                Đăng nhập
+              </Link>
+            </nav>
+          </div>
           <Button onClick={() => setEditor("new")}>
             <Plus />
             Thêm

@@ -1,32 +1,39 @@
-# React + TypeScript + Vite
+# React Developer · Tuần 4–6
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Ứng dụng luyện tập React + TypeScript theo plan: To-do CRUD cục bộ (tuần 4), quản lý sản phẩm với Router và Axios (tuần 5), sau đó thêm Authentication, TanStack Query, Zustand, role/permission và kiểm tra trước commit (tuần 6).
 
-Currently, two official plugins are available:
+## Chạy ứng dụng
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+cp .env.example .env
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Trên PowerShell, nếu chưa có `.env`, dùng `Copy-Item .env.example .env`.
+
+## Các luồng chính
+
+- `/`: To-do list tuần 4, dữ liệu cục bộ.
+- `/login`: đăng nhập demo bằng DummyJSON.
+- `/products`: danh sách sản phẩm có tìm kiếm và phân trang; yêu cầu đăng nhập.
+- `/products/:productId`: chi tiết sản phẩm và thêm vào giỏ hàng.
+- `/products/new`, `/products/:productId/edit`: CRUD chỉ dành cho vai trò `admin` hoặc `moderator`.
+- `/cart`: giỏ hàng dùng Zustand.
+
+Tài khoản ví dụ theo tài liệu DummyJSON: `emilys` / `emilyspass`. Có thể dùng thông tin tài khoản khác trong danh sách users của DummyJSON.
+
+## Tuần 6 áp dụng ở đâu?
+
+- TanStack Query: `src/features/products/queries/product-queries.ts` quản lý query key, cache, mutation và invalidation.
+- Authentication: `src/features/auth`; Axios interceptor gắn access token từ localStorage.
+- Protected Route: route sản phẩm yêu cầu phiên hợp lệ; route ghi sản phẩm kiểm tra role.
+- Permission: `src/features/auth/lib/permissions.ts` và `PermissionGate` ẩn thao tác ghi với người không có quyền.
+- Zustand: auth store và cart store nằm trong `src/features`.
+- Compound Component: `PageState.Title` và `PageState.Description` dùng cùng `PageState` root.
+- Lint/format: `npm run lint`, `npm run format`; Husky chạy `lint-staged` khi commit.
+- Feature-based: `src/features/auth`, `src/features/cart`, `src/features/products` và `src/features/todo-list` gom code theo tính năng.
+
+## Giới hạn của bản demo
+
+DummyJSON là API giả lập. Tạo/sửa/xóa sản phẩm trả dữ liệu mẫu nhưng không lưu bền vững. Vai trò và route guard ở frontend dùng để học luồng phân quyền; backend thật vẫn phải kiểm tra quyền ở server. Token được lưu trong localStorage theo yêu cầu bài thực hành, nhưng ứng dụng production nên dùng cookie `HttpOnly`, `Secure`, `SameSite` do server quản lý và có cơ chế refresh/thu hồi token.

@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react"
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom"
+import { useState } from "react"
+import { Link, useNavigate, useParams } from "react-router-dom"
 import { toast } from "sonner"
 import { Button } from "@/core/components/ui/button"
 import {
@@ -10,83 +10,31 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/core/components/ui/dialog"
-import { productService } from "../services/product-service"
-import type { Product } from "../types/product"
+import { PermissionGate } from "@/features/auth/components/permission-gate"
+import { useCartStore } from "@/features/cart/store/cart-store"
+import { PageState } from "@/shared/components/page-state"
+import { useDeleteProduct, useProduct } from "../queries/product-queries"
 
 export default function ProductDetailPage() {
   const { productId } = useParams<{ productId: string }>()
   const id = Number(productId)
-  const location = useLocation()
   const navigate = useNavigate()
-  const routeProduct = (location.state as { product?: Product } | null)?.product
-  const [product, setProduct] = useState<Product | null>(
-    routeProduct?.id === id ? routeProduct : null
-  )
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
-  const [isDeleting, setIsDeleting] = useState(false)
-  const [deleteError, setDeleteError] = useState<string | null>(null)
-
-  useEffect(() => {
-    setIsLoading(true)
-    setError(null)
-    setProduct(null)
-
-    if (!Number.isInteger(id) || id < 1) {
-      setIsLoading(false)
-      setError("Mã sản phẩm không hợp lệ.")
-      return
-    }
-
-    if (routeProduct?.id === id) {
-      setProduct(routeProduct)
-      setIsLoading(false)
-      return
-    }
-
-    let isActive = true
-
-    productService
-      .getById(id)
-      .then((result) => {
-        if (isActive) setProduct(result)
-      })
-      .catch((requestError: unknown) => {
-        if (isActive) {
-          setError(
-            requestError instanceof Error
-              ? requestError.message
-              : "Đã xảy ra lỗi khi tải sản phẩm."
-          )
-        }
-      })
-      .finally(() => {
-        if (isActive) setIsLoading(false)
-      })
-
-    return () => {
-      isActive = false
-    }
-  }, [id, routeProduct])
+  const validId = Number.isInteger(id) && id > 0
+  const productQuery = useProduct(id)
+  const deleteMutation = useDeleteProduct()
+  const addToCart = useCartStore((state) => state.add)
+  const product = productQuery.data
 
   async function handleDelete() {
     if (!product) return
-
-    setIsDeleting(true)
-    setDeleteError(null)
     try {
-      await productService.delete(product.id)
+      await deleteMutation.mutateAsync(product.id)
       toast.success("API đã nhận yêu cầu xóa sản phẩm.")
       navigate("/products")
-    } catch (requestError) {
-      setDeleteError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Không thể xóa sản phẩm."
-      )
+    } catch {
+      // The mutation error is rendered below.
     } finally {
-      setIsDeleting(false)
       setIsDeleteOpen(false)
     }
   }
@@ -94,14 +42,21 @@ export default function ProductDetailPage() {
   return (
     <section className="space-y-4">
       <h2 className="text-lg font-medium">Chi tiết sản phẩm</h2>
-      {isLoading ? (
-        <p role="status" className="rounded-lg border p-5 text-sm">
-          Đang tải sản phẩm...
-        </p>
-      ) : error ? (
-        <p role="alert" className="rounded-lg border border-destructive p-5 text-sm">
-          {error}
-        </p>
+      {!validId ? (
+        <PageState kind="error">
+          <PageState.Title>Mã sản phẩm không hợp lệ.</PageState.Title>
+        </PageState>
+      ) : productQuery.isPending ? (
+        <PageState>
+          <PageState.Title>Đang tải sản phẩm...</PageState.Title>
+        </PageState>
+      ) : productQuery.isError ? (
+        <PageState kind="error">
+          <PageState.Title>Không tải được sản phẩm</PageState.Title>
+          <PageState.Description>
+            {productQuery.error.message}
+          </PageState.Description>
+        </PageState>
       ) : product ? (
         <>
           <article className="space-y-3 rounded-lg border p-5">
@@ -122,11 +77,28 @@ export default function ProductDetailPage() {
             <p className="font-medium">${product.price.toFixed(2)}</p>
           </article>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => navigate(`/products/${product.id}/edit`)}>
-              Sửa sản phẩm
-            </Button>
-            <Button variant="destructive" onClick={() => setIsDeleteOpen(true)}>
-              Xóa sản phẩm
+            <PermissionGate permission="product:write">
+              <Button
+                variant="outline"
+                onClick={() => navigate(`/products/${product.id}/edit`)}
+              >
+                Sửa sản phẩm
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => setIsDeleteOpen(true)}
+              >
+                Xóa sản phẩm
+              </Button>
+            </PermissionGate>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                addToCart(product)
+                toast.success("Đã thêm sản phẩm vào giỏ hàng.")
+              }}
+            >
+              Thêm vào giỏ hàng
             </Button>
           </div>
         </>
@@ -136,9 +108,9 @@ export default function ProductDetailPage() {
           Quay lại danh sách
         </Link>
       </div>
-      {deleteError && (
+      {deleteMutation.isError && (
         <p role="alert" className="text-sm text-destructive">
-          {deleteError}
+          {deleteMutation.error.message}
         </p>
       )}
       <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
@@ -152,17 +124,17 @@ export default function ProductDetailPage() {
           <DialogFooter>
             <Button
               variant="outline"
-              disabled={isDeleting}
+              disabled={deleteMutation.isPending}
               onClick={() => setIsDeleteOpen(false)}
             >
               Hủy
             </Button>
             <Button
               variant="destructive"
-              disabled={isDeleting}
+              disabled={deleteMutation.isPending}
               onClick={handleDelete}
             >
-              {isDeleting ? "Đang xóa..." : "Xóa"}
+              {deleteMutation.isPending ? "Đang xóa..." : "Xóa"}
             </Button>
           </DialogFooter>
         </DialogContent>

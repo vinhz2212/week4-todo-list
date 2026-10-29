@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { useNavigate, useParams } from "react-router-dom"
@@ -6,11 +6,13 @@ import { toast } from "sonner"
 import { Button } from "@/core/components/ui/button"
 import { Input } from "@/core/components/ui/input"
 import { Textarea } from "@/core/components/ui/textarea"
-import { productService } from "../services/product-service"
+import { PageState } from "@/shared/components/page-state"
 import {
-  productFormSchema,
-  type ProductFormValues,
-} from "../types/product"
+  useCreateProduct,
+  useProduct,
+  useUpdateProduct,
+} from "../queries/product-queries"
+import { productFormSchema, type ProductFormValues } from "../types/product"
 
 interface ProductFormPageProps {
   mode: "create" | "edit"
@@ -20,10 +22,12 @@ export default function ProductFormPage({ mode }: ProductFormPageProps) {
   const { productId } = useParams<{ productId: string }>()
   const isEditing = mode === "edit"
   const id = Number(productId)
+  const validId = Number.isInteger(id) && id > 0
   const navigate = useNavigate()
-  const [isLoading, setIsLoading] = useState(isEditing)
-  const [isSaving, setIsSaving] = useState(false)
-  const [pageError, setPageError] = useState<string | null>(null)
+  const productQuery = useProduct(id, isEditing && validId)
+  const createMutation = useCreateProduct()
+  const updateMutation = useUpdateProduct()
+  const isSaving = createMutation.isPending || updateMutation.isPending
   const {
     register,
     handleSubmit,
@@ -35,85 +39,57 @@ export default function ProductFormPage({ mode }: ProductFormPageProps) {
   })
 
   useEffect(() => {
-    if (!isEditing) return
-
-    if (!Number.isInteger(id) || id < 1) {
-      setPageError("Mã sản phẩm không hợp lệ.")
-      setIsLoading(false)
-      return
-    }
-
-    let isActive = true
-
-    productService
-      .getById(id)
-      .then((product) => {
-        if (!isActive) return
-        reset({
-          title: product.title,
-          description: product.description,
-          category: product.category,
-          price: product.price,
-        })
-      })
-      .catch((requestError: unknown) => {
-        if (isActive) {
-          setPageError(
-            requestError instanceof Error
-              ? requestError.message
-              : "Không thể tải sản phẩm."
-          )
-        }
-      })
-      .finally(() => {
-        if (isActive) setIsLoading(false)
-      })
-
-    return () => {
-      isActive = false
-    }
-  }, [id, isEditing, reset])
+    if (!isEditing || !productQuery.data) return
+    reset({
+      title: productQuery.data.title,
+      description: productQuery.data.description,
+      category: productQuery.data.category,
+      price: productQuery.data.price,
+    })
+  }, [isEditing, productQuery.data, reset])
 
   async function onSubmit(values: ProductFormValues) {
-    setIsSaving(true)
-    setPageError(null)
-
     try {
       const product = isEditing
-        ? await productService.update(id, values)
-        : await productService.create(values)
+        ? await updateMutation.mutateAsync({ id, input: values })
+        : await createMutation.mutateAsync(values)
       toast.success(
         isEditing
           ? "Đã gửi yêu cầu cập nhật đến API demo."
           : "Đã gửi yêu cầu tạo đến API demo."
       )
-      navigate(`/products/${product.id}`, { state: { product } })
-    } catch (requestError) {
-      setPageError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Không thể lưu sản phẩm."
-      )
-    } finally {
-      setIsSaving(false)
+      navigate(`/products/${product.id}`)
+    } catch {
+      // Mutation errors are rendered beside the form.
     }
   }
+
+  const pageError =
+    !validId && isEditing
+      ? "Mã sản phẩm không hợp lệ."
+      : productQuery.isError
+        ? productQuery.error.message
+        : (createMutation.error?.message ?? updateMutation.error?.message)
 
   return (
     <section className="space-y-4">
       <h2 className="text-lg font-medium">
         {isEditing ? "Sửa sản phẩm" : "Thêm sản phẩm"}
       </h2>
-      {isLoading ? (
-        <p role="status" className="rounded-lg border p-5 text-sm">
-          Đang tải dữ liệu sản phẩm...
-        </p>
+      {isEditing && productQuery.isPending && validId ? (
+        <PageState>
+          <PageState.Title>Đang tải dữ liệu sản phẩm...</PageState.Title>
+        </PageState>
       ) : (
-        <form onSubmit={handleSubmit(onSubmit)} noValidate className="grid gap-4">
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          noValidate
+          className="grid gap-4"
+        >
           {pageError && (
-            <p role="alert" className="rounded-lg border border-destructive p-3 text-sm">
-              {pageError}
-            </p>
+            <PageState kind="error">
+              <PageState.Title>{pageError}</PageState.Title>
+            </PageState>
           )}
           <div className="grid gap-2">
             <label htmlFor="product-title" className="text-sm font-medium">
@@ -131,7 +107,10 @@ export default function ProductFormPage({ mode }: ProductFormPageProps) {
             )}
           </div>
           <div className="grid gap-2">
-            <label htmlFor="product-description" className="text-sm font-medium">
+            <label
+              htmlFor="product-description"
+              className="text-sm font-medium"
+            >
               Mô tả
             </label>
             <Textarea
@@ -186,8 +165,12 @@ export default function ProductFormPage({ mode }: ProductFormPageProps) {
             >
               Hủy
             </Button>
-            <Button type="submit" disabled={isSaving}>
-              {isSaving ? "Đang lưu..." : isEditing ? "Lưu thay đổi" : "Tạo sản phẩm"}
+            <Button type="submit" disabled={isSaving || Boolean(pageError)}>
+              {isSaving
+                ? "Đang lưu..."
+                : isEditing
+                  ? "Lưu thay đổi"
+                  : "Tạo sản phẩm"}
             </Button>
           </div>
         </form>
