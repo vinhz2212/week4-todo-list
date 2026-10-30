@@ -1,3 +1,4 @@
+import { memo } from "react"
 import { Pencil, Trash2 } from "lucide-react"
 import { Button } from "@/core/components/ui/button"
 import { Checkbox } from "@/core/components/ui/checkbox"
@@ -11,7 +12,12 @@ interface TaskItemProps {
   onDelete: (task: Task) => void
 }
 
-export function TaskItem({ task, onToggle, onEdit, onDelete }: TaskItemProps) {
+export const TaskItem = memo(function TaskItem({
+  task,
+  onToggle,
+  onEdit,
+  onDelete,
+}: TaskItemProps) {
   return (
     <li className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3">
       <Checkbox
@@ -50,4 +56,4 @@ export function TaskItem({ task, onToggle, onEdit, onDelete }: TaskItemProps) {
       </Button>
     </li>
   )
-}
+})

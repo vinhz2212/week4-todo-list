@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import type { Task, TaskFormValues } from "../types/task"
 
 // 7 việc mẫu để thấy rõ phân trang (mỗi trang 5 việc).
@@ -13,9 +13,12 @@ const INITIAL_TASKS: Task[] = Array.from({ length: 7 }, (_, index) => ({
 export function useTasks() {
   const [tasks, setTasks] = useState<Task[]>(INITIAL_TASKS)
 
-  const remainingCount = tasks.filter((task) => !task.completed).length
+  const remainingCount = useMemo(
+    () => tasks.filter((task) => !task.completed).length,
+    [tasks]
+  )
 
-  function addTask(values: TaskFormValues) {
+  const addTask = useCallback((values: TaskFormValues) => {
     const task: Task = {
       id: crypto.randomUUID(),
       ...values,
@@ -23,25 +26,25 @@ export function useTasks() {
       createdAt: Date.now(),
     }
     setTasks((current) => [task, ...current])
-  }
+  }, [])
 
-  function updateTask(id: string, values: TaskFormValues) {
+  const updateTask = useCallback((id: string, values: TaskFormValues) => {
     setTasks((current) =>
       current.map((task) => (task.id === id ? { ...task, ...values } : task))
     )
-  }
+  }, [])
 
-  function toggleTask(id: string) {
+  const toggleTask = useCallback((id: string) => {
     setTasks((current) =>
       current.map((task) =>
         task.id === id ? { ...task, completed: !task.completed } : task
       )
     )
-  }
+  }, [])
 
-  function deleteTask(id: string) {
+  const deleteTask = useCallback((id: string) => {
     setTasks((current) => current.filter((task) => task.id !== id))
-  }
+  }, [])
 
   return { tasks, remainingCount, addTask, updateTask, toggleTask, deleteTask }
 }

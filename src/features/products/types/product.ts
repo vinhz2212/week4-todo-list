@@ -19,6 +19,8 @@ export interface Product {
   stock?: number
   thumbnail?: string
   images?: string[]
+  meta?: { createdAt?: string }
+  createdAt?: string
 }
 
 export interface ProductListResponse {

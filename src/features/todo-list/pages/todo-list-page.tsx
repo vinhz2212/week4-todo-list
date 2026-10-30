@@ -1,18 +1,9 @@
-import { useState } from "react"
+import { lazy, Suspense, useCallback, useMemo, useState } from "react"
 import { Plus } from "lucide-react"
 import { Link } from "react-router-dom"
 import { toast } from "sonner"
 import { Button } from "@/core/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/core/components/ui/dialog"
-import { DeleteTaskDialog } from "../components/delete-task-dialog"
 import { PaginationBar } from "../components/pagination-bar"
-import { TaskForm } from "../components/task-form"
 import { TaskItem } from "../components/task-item"
 import { TaskToolbar } from "../components/task-toolbar"
 import { usePagination } from "../hooks/use-pagination"
@@ -20,6 +11,12 @@ import { useTasks } from "../hooks/use-tasks"
 import type { Task, TaskFilter, TaskFormValues } from "../types/task"
 
 const PAGE_SIZE = 5
+const TaskEditorDialog = lazy(() => import("../components/task-editor-dialog"))
+const DeleteTaskDialog = lazy(() =>
+  import("../components/delete-task-dialog").then((module) => ({
+    default: module.DeleteTaskDialog,
+  }))
+)
 
 export default function TodoListPage() {
   const { tasks, remainingCount, addTask, updateTask, toggleTask, deleteTask } =
@@ -30,49 +27,60 @@ export default function TodoListPage() {
   const [deleting, setDeleting] = useState<Task | null>(null)
 
   // Dữ liệu suy ra: không cần tạo state riêng.
-  const keyword = search.trim().toLocaleLowerCase("vi")
-  const filteredTasks = tasks.filter((task) => {
-    const matchesSearch = `${task.title} ${task.note}`
-      .toLocaleLowerCase("vi")
-      .includes(keyword)
-    const matchesFilter =
-      filter === "all" ||
-      (filter === "completed" ? task.completed : !task.completed)
-    return matchesSearch && matchesFilter
-  })
+  const filteredTasks = useMemo(() => {
+    const keyword = search.trim().toLocaleLowerCase("vi")
+    return tasks.filter((task) => {
+      const matchesSearch = `${task.title} ${task.note}`
+        .toLocaleLowerCase("vi")
+        .includes(keyword)
+      const matchesFilter =
+        filter === "all" ||
+        (filter === "completed" ? task.completed : !task.completed)
+      return matchesSearch && matchesFilter
+    })
+  }, [filter, search, tasks])
   const { activePage, totalPages, pageItems, setPage } = usePagination(
     filteredTasks,
     PAGE_SIZE
   )
 
-  function handleSearchChange(value: string) {
-    setSearch(value)
-    setPage(1)
-  }
+  const handleSearchChange = useCallback(
+    (value: string) => {
+      setSearch(value)
+      setPage(1)
+    },
+    [setPage]
+  )
 
-  function handleFilterChange(value: TaskFilter) {
-    setFilter(value)
-    setPage(1)
-  }
+  const handleFilterChange = useCallback(
+    (value: TaskFilter) => {
+      setFilter(value)
+      setPage(1)
+    },
+    [setPage]
+  )
 
-  function handleSave(values: TaskFormValues) {
-    if (editor && editor !== "new") {
-      updateTask(editor.id, values)
-      toast.success("Đã cập nhật công việc.")
-    } else {
-      addTask(values)
-      setPage(1) // Việc mới nằm đầu danh sách.
-      toast.success("Đã thêm công việc.")
-    }
-    setEditor(null)
-  }
+  const handleSave = useCallback(
+    (values: TaskFormValues) => {
+      if (editor && editor !== "new") {
+        updateTask(editor.id, values)
+        toast.success("Đã cập nhật công việc.")
+      } else {
+        addTask(values)
+        setPage(1) // Việc mới nằm đầu danh sách.
+        toast.success("Đã thêm công việc.")
+      }
+      setEditor(null)
+    },
+    [addTask, editor, setPage, updateTask]
+  )
 
-  function handleConfirmDelete() {
+  const handleConfirmDelete = useCallback(() => {
     if (!deleting) return
     deleteTask(deleting.id)
     setDeleting(null)
     toast.success("Đã xóa công việc.")
-  }
+  }, [deleteTask, deleting])
 
   return (
     <div className="min-h-svh bg-muted/40 px-4 py-8">
@@ -137,35 +145,25 @@ export default function TodoListPage() {
         </blockquote>
       </section>
 
-      <Dialog
-        open={editor !== null}
-        onOpenChange={(open) => !open && setEditor(null)}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {editor === "new" ? "Thêm công việc" : "Sửa công việc"}
-            </DialogTitle>
-            <DialogDescription>
-              Nhập thông tin công việc rồi bấm lưu.
-            </DialogDescription>
-          </DialogHeader>
-          {editor && (
-            <TaskForm
-              key={editor === "new" ? "new" : editor.id}
-              task={editor === "new" ? undefined : editor}
-              onSubmit={handleSave}
-              onCancel={() => setEditor(null)}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
-
-      <DeleteTaskDialog
-        task={deleting}
-        onConfirm={handleConfirmDelete}
-        onCancel={() => setDeleting(null)}
-      />
+      {editor && (
+        <Suspense fallback={null}>
+          <TaskEditorDialog
+            editor={editor}
+            onOpenChange={(open) => !open && setEditor(null)}
+            onSubmit={handleSave}
+            onCancel={() => setEditor(null)}
+          />
+        </Suspense>
+      )}
+      {deleting && (
+        <Suspense fallback={null}>
+          <DeleteTaskDialog
+            task={deleting}
+            onConfirm={handleConfirmDelete}
+            onCancel={() => setDeleting(null)}
+          />
+        </Suspense>
+      )}
     </div>
   )
 }
